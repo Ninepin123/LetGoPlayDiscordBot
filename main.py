@@ -146,6 +146,9 @@ class CreateEventModal(Modal, title="建立新活動"):
                 )
                 return
 
+        # 先快速回應互動，避免超時
+        await interaction.response.defer()
+
         # 建立活動
         event_manager.create_event(event_name, interaction.user.id, description, target_month)
 
@@ -153,7 +156,7 @@ class CreateEventModal(Modal, title="建立新活動"):
         embed = create_event_embed(event_name, interaction.user)
         view = EventControlView(event_name)
 
-        await interaction.response.send_message(embed=embed, view=view)
+        await interaction.followup.send(embed=embed, view=view)
 
 
 class CreateScheduledEventModal(Modal, title="建立指定時間揪團"):
@@ -211,6 +214,9 @@ class CreateScheduledEventModal(Modal, title="建立指定時間揪團"):
             )
             return
 
+        # 先快速回應互動，避免超時
+        await interaction.response.defer()
+
         # 建立指定時間活動
         event_manager.create_event(
             event_name,
@@ -225,7 +231,7 @@ class CreateScheduledEventModal(Modal, title="建立指定時間揪團"):
         embed = create_scheduled_event_embed(event_name, interaction.user)
         view = ScheduledEventView(event_name)
 
-        await interaction.response.send_message(embed=embed, view=view)
+        await interaction.followup.send(embed=embed, view=view)
 
 
 # ==================== 日曆選擇 UI ====================
