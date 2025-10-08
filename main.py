@@ -35,6 +35,7 @@ class EventManager:
     def save_events(self):
         with open(EVENTS_FILE, 'w', encoding='utf-8') as f:
             json.dump(self.events, f, ensure_ascii=False, indent=2)
+        print(f'💾 已儲存活動資料到 {EVENTS_FILE}')
 
     def create_event(self, name: str, creator_id: int, description: str = "", target_month: str = "", event_type: str = "availability", scheduled_time: str = ""):
         self.events[name] = {
@@ -56,7 +57,10 @@ class EventManager:
     def add_availability(self, event_name: str, user_name: str, time_slots: List[Dict]):
         if event_name in self.events:
             self.events[event_name]["participants"][user_name] = time_slots
+            print(f'✅ 已更新 {user_name} 的時間選擇（{len(time_slots)} 個時段）')
             self.save_events()
+        else:
+            print(f'❌ 活動 {event_name} 不存在')
 
     def add_participant(self, event_name: str, user_id: int, user_name: str):
         """新增參加者到指定時間活動"""
@@ -288,7 +292,6 @@ class CalendarView(View):
                 min_values=0,  # 改為 0，允許取消所有選擇
                 max_values=min(len(options), 25)  # 最多選 25 個
             )
-            select.callback = self.date_select_callback
             self.add_item(select)
         else:
             # 分成兩個選單 (1-15 和 16-31)
@@ -301,7 +304,6 @@ class CalendarView(View):
                 max_values=mid,
                 row=0
             )
-            select1.callback = self.date_select_callback
             self.add_item(select1)
 
             select2 = Select(
@@ -311,17 +313,7 @@ class CalendarView(View):
                 max_values=len(options[mid:]),
                 row=1
             )
-            select2.callback = self.date_select_callback
             self.add_item(select2)
-
-    async def date_select_callback(self, interaction: discord.Interaction):
-        """日期選擇回呼"""
-        if interaction.user.id != self.user_id:
-            await interaction.response.send_message("❌ 這不是你的操作！", ephemeral=True)
-            return
-
-        # 直接確認互動，不顯示訊息
-        await interaction.response.defer()
 
     async def confirm_callback(self, interaction: discord.Interaction):
         """確認選擇"""
@@ -462,8 +454,16 @@ class EventControlView(View):
         common_dates = calculate_common_dates(event["participants"])
 
         if not common_dates:
+            # 顯示除錯資訊
+            participants_info = []
+            for user, dates in event["participants"].items():
+                date_list = [d['date'] for d in dates]
+                participants_info.append(f"**{user}**: {', '.join(date_list[:3])}{'...' if len(date_list) > 3 else ''}")
+
+            debug_text = f"參與人數：{len(event['participants'])} 人\n" + "\n".join(participants_info)
+
             await interaction.response.send_message(
-                "😢 找不到所有人都有空的時間！",
+                f"😢 找不到所有人都有空的時間！\n\n{debug_text}",
                 ephemeral=True
             )
             return
