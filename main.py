@@ -393,8 +393,40 @@ class EventControlView(View):
         super().__init__(timeout=None)
         self.event_name = event_name
 
-    @discord.ui.button(label="🕒 選擇可參加時間", style=discord.ButtonStyle.primary)
-    async def select_time(self, interaction: discord.Interaction, button: Button):
+        # 動態建立按鈕，使用活動名稱作為 custom_id 的一部分
+        select_btn = Button(
+            label="🕒 選擇可參加時間",
+            style=discord.ButtonStyle.primary,
+            custom_id=f"select_time:{event_name}"
+        )
+        select_btn.callback = self.select_time
+        self.add_item(select_btn)
+
+        stats_btn = Button(
+            label="📊 查看統計",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"view_stats:{event_name}"
+        )
+        stats_btn.callback = self.view_stats
+        self.add_item(stats_btn)
+
+        recommend_btn = Button(
+            label="🔍 自動推薦日期",
+            style=discord.ButtonStyle.success,
+            custom_id=f"recommend_time:{event_name}"
+        )
+        recommend_btn.callback = self.recommend_time
+        self.add_item(recommend_btn)
+
+        delete_btn = Button(
+            label="🗑️ 刪除活動",
+            style=discord.ButtonStyle.danger,
+            custom_id=f"delete_event:{event_name}"
+        )
+        delete_btn.callback = self.delete_event
+        self.add_item(delete_btn)
+
+    async def select_time(self, interaction: discord.Interaction):
         # 取得活動的目標月份
         event = event_manager.get_event(self.event_name)
 
@@ -421,8 +453,7 @@ class EventControlView(View):
 
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-    @discord.ui.button(label="📊 查看統計", style=discord.ButtonStyle.secondary)
-    async def view_stats(self, interaction: discord.Interaction, button: Button):
+    async def view_stats(self, interaction: discord.Interaction):
         event = event_manager.get_event(self.event_name)
 
         if not event:
@@ -447,8 +478,7 @@ class EventControlView(View):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @discord.ui.button(label="🔍 自動推薦日期", style=discord.ButtonStyle.success)
-    async def recommend_time(self, interaction: discord.Interaction, button: Button):
+    async def recommend_time(self, interaction: discord.Interaction):
         event = event_manager.get_event(self.event_name)
 
         if not event or not event["participants"]:
@@ -488,8 +518,7 @@ class EventControlView(View):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @discord.ui.button(label="🗑️ 刪除活動", style=discord.ButtonStyle.danger)
-    async def delete_event(self, interaction: discord.Interaction, button: Button):
+    async def delete_event(self, interaction: discord.Interaction):
         event = event_manager.get_event(self.event_name)
 
         if not event:
@@ -524,8 +553,40 @@ class ScheduledEventView(View):
         super().__init__(timeout=None)
         self.event_name = event_name
 
-    @discord.ui.button(label="✅ 我要參加", style=discord.ButtonStyle.success, custom_id="join_event")
-    async def join_event(self, interaction: discord.Interaction, button: Button):
+        # 動態建立按鈕，使用活動名稱作為 custom_id 的一部分
+        join_btn = Button(
+            label="✅ 我要參加",
+            style=discord.ButtonStyle.success,
+            custom_id=f"join_event:{event_name}"
+        )
+        join_btn.callback = self.join_event
+        self.add_item(join_btn)
+
+        leave_btn = Button(
+            label="❌ 取消參加",
+            style=discord.ButtonStyle.danger,
+            custom_id=f"leave_event:{event_name}"
+        )
+        leave_btn.callback = self.leave_event
+        self.add_item(leave_btn)
+
+        view_btn = Button(
+            label="👥 查看參加者",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"view_participants:{event_name}"
+        )
+        view_btn.callback = self.view_participants
+        self.add_item(view_btn)
+
+        delete_btn = Button(
+            label="🗑️ 刪除活動",
+            style=discord.ButtonStyle.danger,
+            custom_id=f"delete_scheduled:{event_name}"
+        )
+        delete_btn.callback = self.delete_event
+        self.add_item(delete_btn)
+
+    async def join_event(self, interaction: discord.Interaction):
         result = event_manager.add_participant(self.event_name, interaction.user.id, interaction.user.display_name)
 
         if result:
@@ -539,8 +600,7 @@ class ScheduledEventView(View):
         else:
             await interaction.response.send_message("❌ 您已經參加此活動了！", ephemeral=True)
 
-    @discord.ui.button(label="❌ 取消參加", style=discord.ButtonStyle.danger, custom_id="leave_event")
-    async def leave_event(self, interaction: discord.Interaction, button: Button):
+    async def leave_event(self, interaction: discord.Interaction):
         result = event_manager.remove_participant(self.event_name, interaction.user.id)
 
         if result:
@@ -554,8 +614,7 @@ class ScheduledEventView(View):
         else:
             await interaction.response.send_message("❌ 您尚未參加此活動！", ephemeral=True)
 
-    @discord.ui.button(label="👥 查看參加者", style=discord.ButtonStyle.secondary, custom_id="view_participants")
-    async def view_participants(self, interaction: discord.Interaction, button: Button):
+    async def view_participants(self, interaction: discord.Interaction):
         event = event_manager.get_event(self.event_name)
 
         if not event:
@@ -583,8 +642,7 @@ class ScheduledEventView(View):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @discord.ui.button(label="🗑️ 刪除活動", style=discord.ButtonStyle.danger, custom_id="delete_scheduled")
-    async def delete_event(self, interaction: discord.Interaction, button: Button):
+    async def delete_event(self, interaction: discord.Interaction):
         event = event_manager.get_event(self.event_name)
 
         if not event:
@@ -716,6 +774,20 @@ def calculate_common_dates(participants: Dict[str, List[Dict]]) -> List[str]:
 @bot.event
 async def on_ready():
     print(f'✅ Bot 已登入為 {bot.user}')
+
+    # 為所有現有活動註冊 persistent views
+    for event_name in event_manager.list_events():
+        event = event_manager.get_event(event_name)
+        event_type = event.get("event_type", "availability")
+
+        if event_type == "scheduled":
+            view = ScheduledEventView(event_name)
+        else:
+            view = EventControlView(event_name)
+
+        bot.add_view(view)
+        print(f'📝 已註冊活動「{event_name}」的 persistent view')
+
     try:
         synced = await bot.tree.sync()
         print(f'✅ 同步了 {len(synced)} 個指令')
