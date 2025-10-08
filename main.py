@@ -33,6 +33,8 @@ class EventManager:
         return {}
 
     def save_events(self):
+        # 確保目錄存在
+        os.makedirs(os.path.dirname(EVENTS_FILE) if os.path.dirname(EVENTS_FILE) else '.', exist_ok=True)
         with open(EVENTS_FILE, 'w', encoding='utf-8') as f:
             json.dump(self.events, f, ensure_ascii=False, indent=2)
         print(f'💾 已儲存活動資料到 {EVENTS_FILE}')
