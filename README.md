@@ -21,42 +21,68 @@
 - 💾 **資料持久化** - 使用 JSON 儲存活動資料
 - 🗑️ **權限管理** - 只有建立者可刪除活動
 
+### 📄 檔案轉換功能（NEW！）
+- 🔄 **自動轉換** - @ Bot 並上傳檔案即可自動轉 PDF
+- 📋 **多格式支援** - 支援 .doc、.docx、.pptx
+- 🌍 **跨平台部署** - Windows、Linux、Mac、Docker 都能用
+- 🔧 **智慧備援** - 自動嘗試多種轉換方法
+- ✅ **免費方案** - 使用 LibreOffice（開源免費）
+
 ## 🚀 快速開始
 
-### 1. 安裝依賴
+### Windows 部署
 
 ```bash
+# 1. 安裝依賴
 pip install -r requirements.txt
+
+# 2. 安裝 LibreOffice（檔案轉換功能）
+# 下載：https://www.libreoffice.org/download/download/
+
+# 3. 設定環境變數
+echo DISCORD_BOT_TOKEN=你的_Token > .env
+
+# 4. 啟動 Bot
+python main.py
 ```
 
-### 2. 設定 Bot Token
-
-複製 `.env.example` 為 `.env` 並填入你的 Discord Bot Token：
+### Linux 部署
 
 ```bash
-cp .env.example .env
+# 1. 安裝依賴
+sudo apt update
+sudo apt install python3 python3-pip libreoffice -y
+pip3 install -r requirements.txt
+
+# 2. 設定環境變數
+nano .env  # 加入 DISCORD_BOT_TOKEN=你的_Token
+
+# 3. 啟動 Bot
+python3 main.py
 ```
 
-編輯 `.env`：
-```
-DISCORD_BOT_TOKEN=你的Bot Token
+### Docker 部署（推薦用於生產環境）
+
+```bash
+# 1. 建立 .env 檔案
+echo "DISCORD_BOT_TOKEN=你的_Token" > .env
+
+# 2. 使用 Docker Compose 啟動
+docker-compose up -d
+
+# 3. 查看日誌
+docker-compose logs -f
 ```
 
-### 3. 建立 Discord Bot
+### 建立 Discord Bot
 
 1. 前往 [Discord Developer Portal](https://discord.com/developers/applications)
 2. 建立新應用程式
 3. 在 Bot 頁面建立 Bot 並複製 Token
 4. 在 OAuth2 > URL Generator 選擇：
    - Scopes: `bot`, `applications.commands`
-   - Bot Permissions: `Send Messages`, `Embed Links`, `Use Slash Commands`
+   - Bot Permissions: `Send Messages`, `Embed Links`, `Use Slash Commands`, `Attach Files`
 5. 使用生成的 URL 邀請 Bot 到伺服器
-
-### 4. 執行 Bot
-
-```bash
-python bot.py
-```
 
 ## 📖 使用說明
 
@@ -243,8 +269,22 @@ discord_whatTimeToPlay/
 2. 使用 `set.intersection()` 計算交集
 3. 回傳所有人都選擇的日期（排序）
 
+## 📚 完整文檔
+
+### 核心功能
+- 📖 [主要 README](./README.md) - 本文檔
+
+### 檔案轉換功能
+- 📄 [檔案轉換說明](./FILE_CONVERTER_README.md) - 功能介紹與技術細節
+- 🚀 [快速開始](./QUICK_START_CONVERTER.md) - 5分鐘快速設定
+- 🔧 [疑難排解](./TROUBLESHOOTING.md) - 常見問題與解決方案
+
+### 部署指南
+- 🌐 [跨平台部署指南](./DEPLOYMENT_GUIDE.md) - Windows、Linux、Docker、雲端部署
+
 ## 🔮 未來擴充
 
+### 揪團功能
 - [ ] 指定時間揪團增加時段選擇
 - [ ] 時區支援
 - [ ] 週期性活動（每週/每月）
@@ -255,6 +295,14 @@ discord_whatTimeToPlay/
 - [ ] 多月份選擇
 - [ ] 參加人數上限設定
 - [ ] 多語言支援
+
+### 檔案轉換功能
+- [ ] 支援 .xlsx (Excel) 轉換
+- [ ] 支援 .odt、.odp (OpenDocument)
+- [ ] PDF 壓縮選項
+- [ ] 批次轉換優化
+- [ ] 自訂 PDF 設定（頁面大小、方向）
+- [ ] 轉換進度顯示
 
 ## 📝 常見問題
 

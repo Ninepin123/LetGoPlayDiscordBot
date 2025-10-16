@@ -8,6 +8,13 @@ import json
 import os
 from dotenv import load_dotenv
 from typing import Dict, List, Optional
+import aiohttp
+import asyncio
+import tempfile
+import pathlib
+import platform
+import shutil
+import subprocess
 
 # 載入環境變數
 load_dotenv()
@@ -770,6 +777,277 @@ def calculate_common_dates(participants: Dict[str, List[Dict]]) -> List[str]:
     return sorted(list(common))
 
 
+# ==================== 檔案轉換功能 ====================
+async def download_file(url: str, save_path: str) -> bool:
+    """下載檔案"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    with open(save_path, 'wb') as f:
+                        f.write(await response.read())
+                    return True
+                return False
+    except Exception as e:
+        print(f"❌ 下載檔案失敗: {e}")
+        return False
+
+
+def get_os_type() -> str:
+    """取得作業系統類型"""
+    return platform.system()  # 'Windows', 'Linux', 'Darwin' (Mac)
+
+
+def check_office_installed() -> bool:
+    """檢查是否安裝 Microsoft Office（僅 Windows）"""
+    if get_os_type() != 'Windows':
+        return False
+    
+    try:
+        import comtypes.client
+        word = comtypes.client.CreateObject('Word.Application')
+        word.Quit()
+        return True
+    except:
+        return False
+
+
+def find_libreoffice_path() -> Optional[str]:
+    """尋找 LibreOffice 執行檔路徑（跨平台）"""
+    os_type = get_os_type()
+    
+    # 先檢查是否在 PATH 中
+    soffice = shutil.which("soffice")
+    if soffice:
+        return soffice
+    
+    # 檢查常見的安裝路徑
+    if os_type == 'Windows':
+        paths = [
+            r"C:\Program Files\LibreOffice\program\soffice.exe",
+            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+        ]
+    elif os_type == 'Linux':
+        paths = [
+            "/usr/bin/soffice",
+            "/usr/bin/libreoffice",
+            "/usr/local/bin/soffice",
+            "/usr/local/bin/libreoffice",
+            "/opt/libreoffice/program/soffice",
+        ]
+    elif os_type == 'Darwin':  # Mac
+        paths = [
+            "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+            "/usr/local/bin/soffice",
+        ]
+    else:
+        paths = []
+    
+    for path in paths:
+        if os.path.exists(path):
+            return path
+    
+    return None
+
+
+def check_libreoffice_installed() -> bool:
+    """檢查是否安裝 LibreOffice（跨平台）"""
+    return find_libreoffice_path() is not None
+
+
+def convert_docx_to_pdf_office(docx_path: str, pdf_path: str) -> tuple[bool, str]:
+    """使用 Microsoft Office 轉換 DOCX 到 PDF（僅 Windows）"""
+    # 只在 Windows 上嘗試
+    if get_os_type() != 'Windows':
+        return False, "Office COM API 僅支援 Windows"
+    
+    try:
+        import comtypes.client
+        
+        word = comtypes.client.CreateObject('Word.Application')
+        word.Visible = False
+        
+        # 轉換路徑為絕對路徑
+        docx_path = str(pathlib.Path(docx_path).absolute())
+        pdf_path = str(pathlib.Path(pdf_path).absolute())
+        
+        doc = word.Documents.Open(docx_path)
+        doc.SaveAs(pdf_path, FileFormat=17)  # 17 = wdFormatPDF
+        doc.Close()
+        word.Quit()
+        
+        return True, "Microsoft Office"
+    except Exception as e:
+        return False, f"Office 錯誤: {str(e)}"
+
+
+def convert_docx_to_pdf_docx2pdf(docx_path: str, pdf_path: str) -> tuple[bool, str]:
+    """使用 docx2pdf 轉換（需要 Office 或 LibreOffice）"""
+    # docx2pdf 主要在 Windows 上運作
+    if get_os_type() != 'Windows':
+        return False, "docx2pdf 僅支援 Windows"
+    
+    try:
+        from docx2pdf import convert
+        convert(docx_path, pdf_path)
+        return True, "docx2pdf"
+    except Exception as e:
+        return False, f"docx2pdf 錯誤: {str(e)}"
+
+
+def convert_docx_to_pdf_libreoffice(docx_path: str, pdf_path: str) -> tuple[bool, str]:
+    """使用 LibreOffice 轉換（跨平台）"""
+    try:
+        # 找到 LibreOffice 執行檔
+        soffice_path = find_libreoffice_path()
+        
+        if not soffice_path:
+            return False, "找不到 LibreOffice（請安裝 LibreOffice）"
+        
+        # 轉換路徑為絕對路徑
+        docx_path = str(pathlib.Path(docx_path).absolute())
+        output_dir = str(pathlib.Path(pdf_path).parent.absolute())
+        
+        # 執行轉換
+        result = subprocess.run(
+            [soffice_path, '--headless', '--convert-to', 'pdf', '--outdir', output_dir, docx_path],
+            capture_output=True,
+            timeout=60,
+            text=True
+        )
+        
+        if result.returncode == 0 and os.path.exists(pdf_path):
+            return True, f"LibreOffice ({get_os_type()})"
+        else:
+            error_msg = result.stderr if result.stderr else result.stdout
+            return False, f"LibreOffice 轉換失敗: {error_msg}"
+            
+    except subprocess.TimeoutExpired:
+        return False, "LibreOffice 轉換超時（檔案可能太大）"
+    except Exception as e:
+        return False, f"LibreOffice 錯誤: {str(e)}"
+
+
+def convert_pptx_to_pdf_office(pptx_path: str, pdf_path: str) -> tuple[bool, str]:
+    """使用 Microsoft Office 轉換 PPTX 到 PDF（僅 Windows）"""
+    # 只在 Windows 上嘗試
+    if get_os_type() != 'Windows':
+        return False, "Office COM API 僅支援 Windows"
+    
+    try:
+        import comtypes.client
+        
+        powerpoint = comtypes.client.CreateObject('Powerpoint.Application')
+        powerpoint.Visible = 1
+        
+        # 轉換路徑為絕對路徑
+        pptx_path = str(pathlib.Path(pptx_path).absolute())
+        pdf_path = str(pathlib.Path(pdf_path).absolute())
+        
+        presentation = powerpoint.Presentations.Open(pptx_path, WithWindow=False)
+        presentation.SaveAs(pdf_path, FileFormat=32)  # 32 = ppSaveAsPDF
+        presentation.Close()
+        powerpoint.Quit()
+        
+        return True, "Microsoft Office"
+    except Exception as e:
+        return False, f"Office 錯誤: {str(e)}"
+
+
+def convert_pptx_to_pdf_libreoffice(pptx_path: str, pdf_path: str) -> tuple[bool, str]:
+    """使用 LibreOffice 轉換 PPTX（跨平台）"""
+    try:
+        # 找到 LibreOffice 執行檔
+        soffice_path = find_libreoffice_path()
+        
+        if not soffice_path:
+            return False, "找不到 LibreOffice（請安裝 LibreOffice）"
+        
+        # 轉換路徑為絕對路徑
+        pptx_path = str(pathlib.Path(pptx_path).absolute())
+        output_dir = str(pathlib.Path(pdf_path).parent.absolute())
+        
+        # 執行轉換
+        result = subprocess.run(
+            [soffice_path, '--headless', '--convert-to', 'pdf', '--outdir', output_dir, pptx_path],
+            capture_output=True,
+            timeout=60,
+            text=True
+        )
+        
+        if result.returncode == 0 and os.path.exists(pdf_path):
+            return True, f"LibreOffice ({get_os_type()})"
+        else:
+            error_msg = result.stderr if result.stderr else result.stdout
+            return False, f"LibreOffice 轉換失敗: {error_msg}"
+            
+    except subprocess.TimeoutExpired:
+        return False, "LibreOffice 轉換超時（檔案可能太大）"
+    except Exception as e:
+        return False, f"LibreOffice 錯誤: {str(e)}"
+
+
+async def convert_file_to_pdf(file_path: str, file_extension: str) -> tuple[Optional[str], str]:
+    """
+    轉換檔案到 PDF，嘗試多種方法（跨平台）
+    返回: (pdf_path, method_used) 或 (None, error_message)
+    """
+    pdf_path = file_path.rsplit('.', 1)[0] + '.pdf'
+    loop = asyncio.get_event_loop()
+    os_type = get_os_type()
+    
+    print(f"🖥️ 作業系統: {os_type}")
+    
+    if file_extension in ['.docx', '.doc']:
+        # 根據作業系統決定轉換順序
+        if os_type == 'Windows':
+            # Windows: 先試 Office，再試 docx2pdf，最後 LibreOffice
+            methods = [
+                ("Microsoft Office", convert_docx_to_pdf_office),
+                ("docx2pdf", convert_docx_to_pdf_docx2pdf),
+                ("LibreOffice", convert_docx_to_pdf_libreoffice),
+            ]
+        else:
+            # Linux/Mac: 只用 LibreOffice
+            methods = [
+                ("LibreOffice", convert_docx_to_pdf_libreoffice),
+            ]
+        
+        for method_name, method_func in methods:
+            print(f"🔄 嘗試使用 {method_name}...")
+            success, msg = await loop.run_in_executor(None, method_func, file_path, pdf_path)
+            if success and os.path.exists(pdf_path):
+                return pdf_path, msg
+            print(f"   ⚠️ {msg}")
+        
+        return None, f"所有轉換方法都失敗了（{os_type} 系統）"
+        
+    elif file_extension == '.pptx':
+        # 根據作業系統決定轉換順序
+        if os_type == 'Windows':
+            # Windows: 先試 Office，再試 LibreOffice
+            methods = [
+                ("Microsoft Office", convert_pptx_to_pdf_office),
+                ("LibreOffice", convert_pptx_to_pdf_libreoffice),
+            ]
+        else:
+            # Linux/Mac: 只用 LibreOffice
+            methods = [
+                ("LibreOffice", convert_pptx_to_pdf_libreoffice),
+            ]
+        
+        for method_name, method_func in methods:
+            print(f"🔄 嘗試使用 {method_name}...")
+            success, msg = await loop.run_in_executor(None, method_func, file_path, pdf_path)
+            if success and os.path.exists(pdf_path):
+                return pdf_path, msg
+            print(f"   ⚠️ {msg}")
+        
+        return None, f"所有轉換方法都失敗了（{os_type} 系統）"
+    
+    return None, "不支援的檔案格式"
+
+
 # ==================== Bot 指令 ====================
 @bot.event
 async def on_ready():
@@ -793,6 +1071,183 @@ async def on_ready():
         print(f'✅ 同步了 {len(synced)} 個指令')
     except Exception as e:
         print(f'❌ 同步指令失敗: {e}')
+
+
+@bot.event
+async def on_message(message: discord.Message):
+    """處理訊息，包括檔案轉換"""
+    # 不處理 bot 自己的訊息
+    if message.author == bot.user:
+        return
+    
+    # 處理指令
+    await bot.process_commands(message)
+    
+    # 檢查是否 bot 被提及
+    if bot.user not in message.mentions:
+        return
+    
+    # 檢查是否有附件
+    if not message.attachments:
+        # 如果被提及但沒有附件，顯示幫助訊息
+        help_embed = discord.Embed(
+            title="📄 檔案轉換助手",
+            description="請上傳檔案並提及我，我會自動將檔案轉換為 PDF！",
+            color=discord.Color.blue()
+        )
+        help_embed.add_field(
+            name="支援格式",
+            value="✅ `.doc`\n✅ `.docx`\n✅ `.pptx`",
+            inline=True
+        )
+        help_embed.add_field(
+            name="使用方式",
+            value=f"上傳檔案 + 提及 {bot.user.mention}",
+            inline=True
+        )
+        
+        # 檢查系統狀態
+        os_type = get_os_type()
+        has_office = check_office_installed()
+        has_libreoffice = check_libreoffice_installed()
+        
+        status_text = f"🖥️ **作業系統：** {os_type}\n\n"
+        
+        if has_office:
+            status_text += "✅ Microsoft Office（僅 Windows）\n"
+        else:
+            if os_type == 'Windows':
+                status_text += "❌ Microsoft Office\n"
+            else:
+                status_text += "⚪ Microsoft Office（不支援 {os_type}）\n"
+        
+        if has_libreoffice:
+            libreoffice_path = find_libreoffice_path()
+            status_text += f"✅ LibreOffice（{libreoffice_path}）\n"
+        else:
+            status_text += "❌ LibreOffice\n"
+        
+        if not has_office and not has_libreoffice:
+            status_text += "\n⚠️ **請至少安裝一個轉換工具：**\n"
+            if os_type == 'Windows':
+                status_text += "• [Microsoft Office](https://www.office.com/)（需授權）\n"
+            status_text += "• [LibreOffice](https://www.libreoffice.org/)（免費、跨平台）✨"
+        elif not has_libreoffice and os_type != 'Windows':
+            status_text += "\n⚠️ **在 {os_type} 系統上，建議安裝 LibreOffice**\n"
+            status_text += "• [LibreOffice 下載](https://www.libreoffice.org/download/download/)"
+        
+        help_embed.add_field(
+            name="系統狀態",
+            value=status_text,
+            inline=False
+        )
+        
+        await message.reply(embed=help_embed)
+        return
+    
+    # 支援的檔案格式
+    supported_extensions = ['.doc', '.docx', '.pptx']
+    
+    # 處理每個附件
+    for attachment in message.attachments:
+        # 取得檔案副檔名
+        file_extension = pathlib.Path(attachment.filename).suffix.lower()
+        
+        # 檢查是否為支援的格式
+        if file_extension not in supported_extensions:
+            continue
+        
+        # 發送處理中訊息
+        processing_msg = await message.reply(f"📄 正在處理 `{attachment.filename}`，請稍候...")
+        
+        try:
+            # 建立臨時目錄
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # 下載檔案
+                original_file_path = os.path.join(temp_dir, attachment.filename)
+                download_success = await download_file(attachment.url, original_file_path)
+                
+                if not download_success:
+                    await processing_msg.edit(content=f"❌ 下載 `{attachment.filename}` 失敗！")
+                    continue
+                
+                # 轉換為 PDF（會嘗試多種方法）
+                result = await convert_file_to_pdf(original_file_path, file_extension)
+                pdf_path, method_or_error = result
+                
+                if pdf_path and os.path.exists(pdf_path):
+                    # 建立 PDF 檔名
+                    pdf_filename = pathlib.Path(attachment.filename).stem + '.pdf'
+                    
+                    # 檢查檔案大小（Discord 限制）
+                    pdf_size = os.path.getsize(pdf_path)
+                    max_size = 8 * 1024 * 1024  # 8MB for free servers
+                    
+                    if pdf_size > max_size:
+                        await processing_msg.edit(
+                            content=f"❌ 轉換後的 PDF 檔案太大 ({pdf_size / 1024 / 1024:.1f} MB)，"
+                            f"超過 Discord 限制 (8 MB)。"
+                        )
+                        continue
+                    
+                    # 上傳 PDF
+                    with open(pdf_path, 'rb') as pdf_file:
+                        discord_file = discord.File(pdf_file, filename=pdf_filename)
+                        await message.reply(
+                            f"✅ 轉換完成！`{attachment.filename}` → `{pdf_filename}`\n"
+                            f"使用方法: {method_or_error}",
+                            file=discord_file
+                        )
+                    
+                    # 刪除處理中訊息
+                    await processing_msg.delete()
+                    
+                    print(f"✅ 成功轉換: {attachment.filename} → {pdf_filename} (使用 {method_or_error})")
+                else:
+                    # 轉換失敗，提供詳細錯誤訊息
+                    error_embed = discord.Embed(
+                        title=f"❌ 轉換 `{attachment.filename}` 失敗",
+                        description=f"錯誤詳情: {method_or_error}",
+                        color=discord.Color.red()
+                    )
+                    
+                    # 檢查並提供解決方案
+                    has_office = check_office_installed()
+                    has_libreoffice = check_libreoffice_installed()
+                    
+                    solutions = []
+                    if not has_office and not has_libreoffice:
+                        solutions.append("⚠️ **未偵測到轉換工具**")
+                        solutions.append("\n請安裝以下任一工具：")
+                        solutions.append("1. [Microsoft Office](https://www.office.com/) - 商業軟體")
+                        solutions.append("2. [LibreOffice](https://www.libreoffice.org/) - 免費開源")
+                    elif not has_office:
+                        solutions.append("ℹ️ 系統未安裝 Microsoft Office")
+                        solutions.append("已嘗試使用 LibreOffice，但轉換失敗")
+                    elif not has_libreoffice:
+                        solutions.append("ℹ️ 系統未安裝 LibreOffice")
+                        solutions.append("已嘗試使用 Microsoft Office，但轉換失敗")
+                    else:
+                        solutions.append("⚠️ 已嘗試 Microsoft Office 和 LibreOffice，都失敗了")
+                        solutions.append("可能原因：")
+                        solutions.append("• 檔案可能損壞")
+                        solutions.append("• 檔案格式不正確")
+                        solutions.append("• Office/LibreOffice 未正確安裝")
+                    
+                    error_embed.add_field(
+                        name="解決方案",
+                        value="\n".join(solutions),
+                        inline=False
+                    )
+                    
+                    await processing_msg.edit(content=None, embed=error_embed)
+                    
+        except Exception as e:
+            error_msg = f"❌ 處理 `{attachment.filename}` 時發生錯誤：\n```{str(e)}```"
+            await processing_msg.edit(content=error_msg)
+            print(f"❌ 處理檔案時發生錯誤: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 @bot.tree.command(name="create", description="建立時間調查活動")
