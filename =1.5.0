@@ -1,0 +1,7 @@
+Collecting PyNaCl
+  Downloading pynacl-1.6.1-cp38-abi3-win_amd64.whl.metadata (10 kB)
+Requirement already satisfied: cffi>=2.0.0 in c:\users\pin45\appdata\local\programs\python\python313\lib\site-packages (from PyNaCl) (2.0.0)
+Requirement already satisfied: pycparser in c:\users\pin45\appdata\local\programs\python\python313\lib\site-packages (from cffi>=2.0.0->PyNaCl) (2.22)
+Downloading pynacl-1.6.1-cp38-abi3-win_amd64.whl (238 kB)
+Installing collected packages: PyNaCl
+Successfully installed PyNaCl-1.6.1
